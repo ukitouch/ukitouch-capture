@@ -1,0 +1,23 @@
+[package]
+name = "ukitouch-capture"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "capture"
+path = "src/mod.rs"
+
+[[bin]]
+name = "ukitouch-capture"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.23.1"
+webp = "0.3"
+
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
+x11rb = { version = "0.14", features = ["shm", "damage", "xfixes", "xtest"] }
+libc = "0.2"
