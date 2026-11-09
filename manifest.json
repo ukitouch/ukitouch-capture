@@ -2,7 +2,5 @@
   "publisher": "ukitouch",
   "name": "capture",
   "version": "0.1.0",
-  "kind": "native",
-  "entry": "ukitouch-capture",
-  "platforms": ["linux"]
+  "kind": "native"
 }
