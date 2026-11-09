@@ -1,4 +1,4 @@
-//! TODO: Currently only x11 implemented.
+//! TODO: Only x11 and Windows implemented.
 
 use std::time::Duration;
 
@@ -126,13 +126,20 @@ pub mod stream;
 #[cfg(all(unix, not(target_os = "android")))]
 pub mod x11;
 
+#[cfg(windows)]
+pub mod windows;
+
 /// Build the capturing backend for this platform.
 pub fn create() -> Result<Box<dyn CaptureBackend>, CaptureError> {
     #[cfg(all(unix, not(target_os = "android")))]
     {
         return x11::X11Capture::new().map(|b| Box::new(b) as Box<dyn CaptureBackend>);
     }
-    #[cfg(not(all(unix, not(target_os = "android"))))]
+    #[cfg(windows)]
+    {
+        return windows::WindowsCapture::new().map(|b| Box::new(b) as Box<dyn CaptureBackend>);
+    }
+    #[cfg(not(any(windows, all(unix, not(target_os = "android")))))]
     {
         Err(CaptureError::Unsupported {
             reason: format!("no capture backend for {}", std::env::consts::OS),

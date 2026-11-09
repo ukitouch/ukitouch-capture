@@ -21,3 +21,10 @@ webp = "0.3"
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 x11rb = { version = "0.14", features = ["shm", "damage", "xfixes", "xtest"] }
 libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+] }
