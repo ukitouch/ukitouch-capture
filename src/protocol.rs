@@ -20,11 +20,6 @@ pub enum Incoming {
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Outgoing {
-    /// The first message, register this extension with its information.
-    Register {
-        capabilities: Vec<String>,
-        version: String,
-    },
     /// Response to a single call.
     Reply {
         id: u64,
@@ -40,24 +35,6 @@ pub type Out = Arc<Mutex<Stdout>>;
 /// Wrap stdout for the request handlers.
 pub fn stdout() -> Out {
     Arc::new(Mutex::new(tokio::io::stdout()))
-}
-
-pub async fn register(out: &Out) {
-    let capabilities = [
-        "start_screen_stream",
-        "stream_configure",
-        "stop_screen_stream",
-    ]
-    .map(String::from)
-    .to_vec();
-    send(
-        out,
-        &Outgoing::Register {
-            capabilities,
-            version: env!("CARGO_PKG_VERSION").into(),
-        },
-    )
-    .await;
 }
 
 pub async fn reply(out: &Out, id: u64, result: Result<Value, String>) {

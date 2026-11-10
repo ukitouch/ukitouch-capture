@@ -32,7 +32,6 @@ struct ConfigureStream {
 #[tokio::main]
 async fn main() {
     let out = protocol::stdout();
-    protocol::register(&out).await;
 
     let state = StreamState::default();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
