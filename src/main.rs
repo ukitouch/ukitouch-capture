@@ -24,6 +24,12 @@ struct StartStream {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct AckStream {
+    id: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ConfigureStream {
     id: u64,
     options: StreamOptions,
@@ -61,6 +67,10 @@ async fn dispatch(state: &StreamState, method: &str, payload: Value) -> Result<V
         "stream_configure" => {
             let args = parse::<ConfigureStream>(payload)?;
             state.configure(args.id, args.options)?;
+            Ok(Value::Null)
+        }
+        "stream_ack" => {
+            state.ack(parse::<AckStream>(payload)?.id)?;
             Ok(Value::Null)
         }
         "stop_screen_stream" => {

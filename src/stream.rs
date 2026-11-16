@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -12,6 +12,9 @@ use super::{create, CaptureBackend, CaptureOptions, Damage, ScreenInfo, Started,
 
 /// The smallest resolution scale of the screen.
 const MIN_SCALE: f32 = 0.05;
+
+/// The most frames allowed between the pipe and the viewer.
+const MAX_INFLIGHT: u32 = 2;
 
 /// Capture options to the screen collector.
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
@@ -65,6 +68,10 @@ struct StreamHandle {
     stop: Notify,
     /// Options from a `stream_configure`, taken by the task on its next turn.
     pending_options: std::sync::Mutex<Option<StreamOptions>>,
+    /// Frames written to the pipe the viewer has not acknowledged yet.
+    inflight: AtomicU32,
+    /// Notified when a frame's acknowledgment lands.
+    ack: Notify,
 }
 
 impl StreamState {
@@ -85,6 +92,8 @@ impl StreamState {
             running: AtomicBool::new(true),
             stop: Notify::new(),
             pending_options: std::sync::Mutex::new(None),
+            inflight: AtomicU32::new(0),
+            ack: Notify::new(),
         });
         self.streams.lock().unwrap().insert(id, handle.clone());
 
@@ -101,6 +110,29 @@ impl StreamState {
     pub fn configure(&self, id: u64, options: StreamOptions) -> Result<(), String> {
         if let Some(handle) = self.streams.lock().unwrap().get(&id) {
             *handle.pending_options.lock().unwrap() = Some(options);
+        }
+        Ok(())
+    }
+
+    /// Give back a capture credit for one frame the viewer received.
+    pub fn ack(&self, id: u64) -> Result<(), String> {
+        if let Some(handle) = self.streams.lock().unwrap().get(&id) {
+            let mut cur = handle.inflight.load(Ordering::Acquire);
+            while cur > 0 {
+                match handle.inflight.compare_exchange_weak(
+                    cur,
+                    cur - 1,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => {
+                        handle.ack.notify_waiters();
+                        return Ok(());
+                    }
+                    Err(next) => cur = next,
+                }
+            }
+            // No frame in flight to credit, ignore it.
         }
         Ok(())
     }
@@ -133,6 +165,16 @@ async fn run_stream(
     }
 
     while handle.running.load(Ordering::Relaxed) {
+        // Wait until the viewer has acknowledged enough frames
+        // that at most MAX_INFLIGHT remain between the pipe and the viewer.
+        while handle.inflight.load(Ordering::Acquire) >= MAX_INFLIGHT {
+            let notified = handle.ack.notified();
+            tokio::select! {
+                _ = notified => {}
+                _ = tokio::time::sleep(POLL_INTERVAL) => {}
+            }
+        }
+
         // Apply any options asked for since the last turn.
         let pending = handle.pending_options.lock().unwrap().take();
         if let Some(options) = pending {
@@ -195,6 +237,8 @@ async fn run_stream(
         if sink.push(&frame).await.is_err() {
             return;
         }
+        // The frame is in flight until the viewer acknowledges it.
+        handle.inflight.fetch_add(1, Ordering::Release);
 
         tokio::time::sleep(POLL_INTERVAL).await;
     }
